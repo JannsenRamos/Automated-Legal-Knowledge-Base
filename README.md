@@ -7,7 +7,7 @@ This project automates the structuring of the 2022 DOLE Edition of the Philippin
 - Selective Indexing: A domain-aware filter that identifies and excludes repealed provisions from the final search index.
 
 # Tech Stack
-Language: Python
-Models: gpt-oss-120b:free (OpenRouter)
-Libraries: LangChain, Pydantic, PyMuPDF (fitz)
-Database Readiness: Structured for FAISS / LSH Vector Stores
+-Language: Python
+-Models: gpt-oss-120b:free (OpenRouter)
+-Libraries: LangChain, Pydantic, PyMuPDF (fitz)
+-Database Readiness: Structured for FAISS / LSH Vector Stores
