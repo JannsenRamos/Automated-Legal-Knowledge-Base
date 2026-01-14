@@ -6,10 +6,8 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 
 # 1. SETUP & SECURITY
-# Points to your custom env file 'api_keys.env'
 env_path = os.path.join(os.path.dirname(__file__), 'api_keys.env')
 load_dotenv(env_path)
-
 DB_PATH = "labor_law_knowledge_base.db"
 
 # 2. DATA MODELS (Restored from your notebook)
@@ -35,11 +33,11 @@ ROUTING_RULES = {
     "contracts": ["contract", "dismissal", "tenure", "termination", "probationary", "resignation"],
 }
 
-# 4. DATABASE INITIALIZATION: Separate Tables for Categories
+# 4. DATABASE INITIALIZATION
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    # Ensure separate tables exist for each category
+    # Create separate tables for categorized storage
     for table_name in ["wages", "contracts", "general"]:
         cursor.execute(f'''
             CREATE TABLE IF NOT EXISTS {table_name} (
@@ -56,11 +54,9 @@ def init_db():
     conn.commit()
     conn.close()
 
-# 5. THE AI ROUTING & PARSING ENGINE
+# 5. INTEGRATED PARSING & AI ROUTING
 def run_full_pipeline(uploaded_file, api_key):
     init_db()
-    
-    # Initialize LLM Router
     llm = ChatOpenAI(
         model="openai/gpt-oss-120b:free", 
         api_key=api_key, 
@@ -68,18 +64,16 @@ def run_full_pipeline(uploaded_file, api_key):
         temperature=0
     )
     
-    # Process PDF from the upload stream
     doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
     sample_text = doc[0].get_text()[:500]
     
-    # AI ROUTING STEP
+    # AI Identification Step
     try:
         response = llm.invoke(f"Identify legal text type. Return 'LABOR_CODE' or 'GENERIC': {sample_text}")
         doc_type = response.content.strip()
     except:
         doc_type = "LABOR_CODE"
 
-    # Regex splitting from your original code
     pattern = r"ART\.\s+(\d+)(?:\s+\[(\d+)\])?"
     full_text = "".join([page.get_text() for page in doc])
     parts = re.split(pattern, full_text)
@@ -106,6 +100,7 @@ def run_full_pipeline(uploaded_file, api_key):
             metadata=DocumentMetadata(source_file=uploaded_file.name, file_type=doc_type, page_number=0, corpus_category=category)
         )
 
+        # INSERT INTO SPECIFIC TABLE
         cursor.execute(f'''
             INSERT INTO {category} (article_number, old_article_number, title, content, is_repealed, full_json, timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -117,5 +112,5 @@ def run_full_pipeline(uploaded_file, api_key):
     conn.close()
     return processed_count, doc_type
 
-# Helper to check if the key is present in env
+# Load key for frontend use
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
