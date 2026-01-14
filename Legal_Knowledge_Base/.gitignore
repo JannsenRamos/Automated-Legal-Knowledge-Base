@@ -1,0 +1,25 @@
+# --- Security: NEVER upload these ---
+api_keys.env
+.env
+*.env
+
+# --- Database: Local data should stay local ---
+labor_law_knowledge_base.db
+*.db
+*.sqlite3
+
+# --- Python: System and environment files ---
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Streamlit: Local config and state ---
+.streamlit/
+static/
+
+# --- OS Specific: Temporary files ---
+.DS_Store
+Thumbs.db
