@@ -1,4 +1,6 @@
-streamlit
+fastapi
+uvicorn
+python-multipart
 psycopg2-binary
 pymupdf
 langchain-openai
