@@ -1,5 +1,7 @@
 streamlit
-pydantic
-langchain_openai
+psycopg2-binary
 pymupdf
+langchain-openai
+pydantic
 python-dotenv
+pandas
