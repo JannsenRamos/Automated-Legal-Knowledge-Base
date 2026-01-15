@@ -2,9 +2,14 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from logic_helpers import parse_and_validate, save_to_supabase
 
+# Package-aware import to find your helpers
+try:
+    from api.logic_helpers import parse_and_validate, save_to_supabase
+except ImportError:
+    from logic_helpers import parse_and_validate, save_to_supabase
 
+# Robust .env loading
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
@@ -15,28 +20,30 @@ def health():
     return {
         "status": "Backend Active",
         "env_check": {
-            # These should now return 'true' after the fix
             "api_key_loaded": bool(os.getenv("OPENROUTER_API_KEY")),
             "db_url_loaded": bool(os.getenv("SUPABASE_DB_URL"))
         }
     }
 
-# 2. YOUR PARSER ROUTE
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
+        await file.seek(0)
+        content = await file.read()
+        
+        # Pull the key from the environment
         api_key = os.getenv("OPENROUTER_API_KEY")
         db_url = os.getenv("SUPABASE_DB_URL")
         
-        # 1. READ THE FILE BYTES
-        file_content = await file.read() 
+        # FIX: Pass BOTH content and api_key
+        chunks = parse_and_validate(content, api_key)
         
-        # 2. PASS BYTES TO PARSER
-        # Ensure your logic_helpers.py can handle bytes/stream!
-        chunks = parse_and_validate(file_content, api_key)
         save_to_supabase(chunks, db_url)
         
-        return {"success": True, "count": len(chunks)}
+        return {
+            "success": True, 
+            "articles": [c.model_dump() for c in chunks]
+        }
     except Exception as e:
-        print(f"CRITICAL ERROR: {str(e)}") # This prints to your terminal logs
+        print(f"CRITICAL ERROR: {e}")
         raise HTTPException(status_code=400, detail=str(e))
