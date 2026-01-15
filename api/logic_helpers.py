@@ -25,7 +25,7 @@ class LaborArticleChunk(BaseModel):
     metadata: DocumentMetadata
 
 def identify_document_pattern(sample_text, api_key):
-    """Uses GPT-OSS Free to check the first 1000 characters."""
+    """Uses GPT-OSS Free with improved prompt and fuzzy matching."""
     try:
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
@@ -37,18 +37,29 @@ def identify_document_pattern(sample_text, api_key):
                 "model": "openai/gpt-oss-120b:free",
                 "messages": [{
                     "role": "user", 
-                    "content": f"Identify if this is a Labor Code. Return 'LABOR_CODE' or 'GENERIC'. Text: {sample_text[:1000]}"
+                    "content": (
+                        "Task: Determine if the following text is from a Philippine Labor Code. "
+                        "Respond with ONLY the word 'LABOR_CODE' if it is, or 'GENERIC' if it is not. "
+                        f"Text: {sample_text[:1000]}"
+                    )
                 }],
                 "max_tokens": 10
             })
         )
         res_data = response.json()
-        # Fallback if API is busy
-        if 'choices' not in res_data:
+        
+        # Pull the content and clean it
+        ai_reply = res_data['choices'][0]['message']['content'].strip().upper()
+        print(f"DEBUG: AI said: '{ai_reply}'") # See the exact response in terminal
+        
+        # FUZZY MATCH: If it contains 'LABOR_CODE', let it through
+        if "LABOR_CODE" in ai_reply:
             return "LABOR_CODE"
-        return res_data['choices'][0]['message']['content'].strip()
-    except:
-        return "LABOR_CODE"
+            
+        return "GENERIC"
+    except Exception as e:
+        print(f"Router Error (Passing through to Regex): {e}")
+        return "LABOR_CODE" # If AI is down, trust the Regex instead
 
 def parse_and_validate(pdf_bytes, api_key): # Matches the 2 arguments
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
