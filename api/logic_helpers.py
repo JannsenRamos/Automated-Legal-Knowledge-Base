@@ -144,25 +144,31 @@ def save_to_supabase(chunks, db_url):
                     title TEXT, 
                     content TEXT, 
                     is_repealed BOOLEAN,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(article_number, old_article_number)
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             
-            # 2. Insert the data with ON CONFLICT to prevent duplicates
+            # 2. Check if article already exists
             cur.execute(
-                f"""
-                INSERT INTO {table} (article_number, old_article_number, title, content, is_repealed) 
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (article_number, old_article_number) 
-                DO UPDATE SET 
-                    title = EXCLUDED.title,
-                    content = EXCLUDED.content,
-                    is_repealed = EXCLUDED.is_repealed,
-                    created_at = CURRENT_TIMESTAMP
-                """, 
-                (chunk.article_number, chunk.old_article_number, chunk.title, chunk.content, chunk.is_repealed)
+                f"SELECT id FROM {table} WHERE article_number = %s AND old_article_number IS NOT DISTINCT FROM %s",
+                (chunk.article_number, chunk.old_article_number)
             )
+            
+            if cur.fetchone():
+                # Update existing article
+                cur.execute(
+                    f"""UPDATE {table} 
+                       SET title = %s, content = %s, is_repealed = %s, created_at = CURRENT_TIMESTAMP
+                       WHERE article_number = %s AND old_article_number IS NOT DISTINCT FROM %s""",
+                    (chunk.title, chunk.content, chunk.is_repealed, chunk.article_number, chunk.old_article_number)
+                )
+            else:
+                # Insert new article
+                cur.execute(
+                    f"""INSERT INTO {table} (article_number, old_article_number, title, content, is_repealed) 
+                       VALUES (%s, %s, %s, %s, %s)""",
+                    (chunk.article_number, chunk.old_article_number, chunk.title, chunk.content, chunk.is_repealed)
+                )
     finally:
         cur.close()
         conn.close()
