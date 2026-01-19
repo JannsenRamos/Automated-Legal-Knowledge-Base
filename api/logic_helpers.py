@@ -8,21 +8,18 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
-# Models from your notebook
-class DocumentMetadata(BaseModel):
-    source_file: str
-    file_type: str
-    page_number: int
-    corpus_category: str
-    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
-class LaborArticleChunk(BaseModel):
-    article_number: int
-    old_article_number: Optional[int] = None
+class LegalMetadata(BaseModel):
+    source_file: str
+    jurisdiction: str    # "PH" or "HK"
+    corpus_category: str # "wages", "contracts", etc.
+
+class LegalOrdinanceChunk(BaseModel):
+    section_id: str      # "Art. 1" or HK Section "10A"
     title: str
     content: str
-    is_repealed: bool = False
-    metadata: DocumentMetadata
+    is_repealed: bool
+    metadata: LegalMetadata
 
 def identify_document_pattern(sample_text, api_key):
     """Uses GPT-OSS Free with improved prompt and fuzzy matching."""
@@ -61,68 +58,49 @@ def identify_document_pattern(sample_text, api_key):
         print(f"Router Error (Passing through to Regex): {e}")
         return "LABOR_CODE" # If AI is down, trust the Regex instead
     
-def parse_and_validate(pdf_bytes, api_key):
-    # 1. Open and extract text
+def parse_sensitive_legal_text(pdf_bytes, filename):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     full_text = "".join([page.get_text() for page in doc])
-    
-    # 2. Text Normalization: Remove non-breaking spaces (\xa0)
-    full_text = full_text.replace('\xa0', ' ').replace('\t', ' ')
-    
-    # AI Gatekeeper
-    if identify_document_pattern(full_text, api_key) != "LABOR_CODE":
-        raise ValueError("AI rejected document as non-labor code.")
+    full_text = full_text.replace('\xa0', ' ')
 
-    # 3. Robust Regex Pattern
-    # (?i) = Case-insensitive
-    # ART\.?\s* = Matches "ART", "ART.", "Art", "Art." followed by optional space
-    # (\d+) = Captures the article number
-    # (?:\s*\[(\d+)\])? = Captures optional old article number in brackets
-    pattern = r"(?i)ART\.?\s*(\d+)(?:\s*\[(\d+)\])?"
-    
-    parts = re.split(pattern, full_text)
-    
-    # Validation check for the split
-    if len(parts) <= 1:
-        print(f"DEBUG: Still no matches. Text preview: {full_text[500:1000]}")
-        return []
+    # 1. Detection
+    is_hk = "Hong Kong" in full_text[:1000] or "Cap. 57" in full_text[:1000]
+    pattern = re.compile(r"(?m)^(\d+[A-Z]*)\.\s+(.*)") if is_hk else re.compile(r"(?i)ART\.?\s*(\d+)")
+    jurisdiction = "HK" if is_hk else "PH"
 
     chunks = []
-    ROUTING_RULES = {
-        "wages": ["wage", "salary", "pay", "overtime", "payroll", "deduction", "night shift"],
-        "contracts": ["contract", "dismissal", "tenure", "termination", "probationary", "resignation"],
-    }
+    matches = list(pattern.finditer(full_text))
 
-    # Re-looping with the 3-part split structure
-    for i in range(1, len(parts), 3):
-        art_num = parts[i]
-        old_num = parts[i+1]
-        content = parts[i+2].strip() if (i+2) < len(parts) else ""
+    # 2. Capture Preamble (Text before the first match)
+    if matches and matches[0].start() > 0:
+        preamble = full_text[:matches[0].start()].strip()
+        if len(preamble) > 5:
+            chunks.append(LegalOrdinanceChunk(
+                section_id="PREAMBLE",
+                title="Introductory Provisions",
+                content=preamble,
+                is_repealed=False,
+                metadata=LegalMetadata(source_file=filename, jurisdiction=jurisdiction, corpus_category="meta")
+            ))
+
+    # 3. Capture all sections without gaps
+    for i, match in enumerate(matches):
+        start = match.end()
+        end = matches[i+1].start() if i+1 < len(matches) else len(full_text)
+        content = full_text[start:end].strip()
         
-        if not content: continue
+        # Identification based on jurisdiction
+        sec_id = match.group(1)
+        title = match.group(2) if is_hk else content.split('\n')[0][:100]
 
-        # Determine category based on keywords
-        category = "general"
-        for cat, keywords in ROUTING_RULES.items():
-            if any(k in content.lower() for k in keywords):
-                category = cat
-                break
-
-        chunks.append(LaborArticleChunk(
-            article_number=int(art_num),
-            old_article_number=int(old_num) if old_num else None,
-            title=content.split('\n')[0][:100],
+        chunks.append(LegalOrdinanceChunk(
+            section_id=sec_id,
+            title=title,
             content=content,
             is_repealed="repealed" in content.lower(),
-            metadata=DocumentMetadata(
-                source_file="upload.pdf", 
-                file_type="legal_code", 
-                page_number=0, 
-                corpus_category=category
-            )
+            metadata=LegalMetadata(source_file=filename, jurisdiction=jurisdiction, corpus_category="general")
         ))
-    
-    print(f"DEBUG: Extracted {len(chunks)} articles.")
+
     return chunks
 
 def save_to_supabase(chunks, db_url):

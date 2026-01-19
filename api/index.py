@@ -34,6 +34,9 @@ async def upload_file(file: UploadFile = File(...)):
         api_key = os.getenv("OPENROUTER_API_KEY")
         db_url = os.getenv("SUPABASE_DB_URL")
         
+        print(f"DEBUG: API Key configured: {bool(api_key)}")
+        print(f"DEBUG: DB URL configured: {bool(db_url)}")
+        
         # 2. Reset the file pointer for the next operation (Optional but safe)
         await file.seek(0)
         
@@ -48,6 +51,13 @@ async def upload_file(file: UploadFile = File(...)):
 
         save_to_supabase(chunks, db_url)
         return {"success": True, "articles": [c.model_dump() for c in chunks]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in upload_file: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
