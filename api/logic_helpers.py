@@ -104,49 +104,52 @@ def parse_sensitive_legal_text(pdf_bytes, filename):
     return chunks
 
 def save_to_supabase(chunks, db_url):
-    """Saves to Supabase and automatically creates tables based on notebook categories."""
+    """
+    Saves unified legal chunks to the 'labor_ordinances' table.
+    Ensures that data for both PH and HK jurisdictions are stored correctly.
+    """
+    if not chunks:
+        print("DEBUG: No chunks to save.")
+        return
+
+    # Connection setup using the Transaction Pooler URL (Port 6543)
     conn = psycopg2.connect(db_url)
-    conn.autocommit = True 
+    conn.autocommit = True
     cur = conn.cursor()
+
     try:
+        # 1. OPTIONAL: Clear the database for a fresh upload
+        # Only use this if you want to replace all data every time you upload
+        # cur.execute("TRUNCATE TABLE labor_ordinances RESTART IDENTITY;")
+
+        # 2. Prepared Statement for efficiency and security
+        query = """
+            INSERT INTO labor_ordinances (
+                jurisdiction, 
+                section_id, 
+                title, 
+                content, 
+                is_repealed, 
+                source_file
+            ) VALUES (%s, %s, %s, %s, %s, %s);
+        """
+
         for chunk in chunks:
-            # Use the corpus_category from metadata to determine the table name
-            table = chunk.metadata.corpus_category
+            # Map the Pydantic model fields to database columns
+            cur.execute(query, (
+                chunk.metadata.jurisdiction,
+                chunk.section_id,
+                chunk.title,
+                chunk.content,
+                chunk.is_repealed,
+                chunk.metadata.source_file
+            ))
             
-            # 1. Create the table with the specific columns from your notebook
-            cur.execute(f"""
-                CREATE TABLE IF NOT EXISTS {table} (
-                    id SERIAL PRIMARY KEY, 
-                    article_number INT, 
-                    old_article_number INT, 
-                    title TEXT, 
-                    content TEXT, 
-                    is_repealed BOOLEAN,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            
-            # 2. Check if article already exists
-            cur.execute(
-                f"SELECT id FROM {table} WHERE article_number = %s AND old_article_number IS NOT DISTINCT FROM %s",
-                (chunk.article_number, chunk.old_article_number)
-            )
-            
-            if cur.fetchone():
-                # Update existing article
-                cur.execute(
-                    f"""UPDATE {table} 
-                       SET title = %s, content = %s, is_repealed = %s, created_at = CURRENT_TIMESTAMP
-                       WHERE article_number = %s AND old_article_number IS NOT DISTINCT FROM %s""",
-                    (chunk.title, chunk.content, chunk.is_repealed, chunk.article_number, chunk.old_article_number)
-                )
-            else:
-                # Insert new article
-                cur.execute(
-                    f"""INSERT INTO {table} (article_number, old_article_number, title, content, is_repealed) 
-                       VALUES (%s, %s, %s, %s, %s)""",
-                    (chunk.article_number, chunk.old_article_number, chunk.title, chunk.content, chunk.is_repealed)
-                )
+        print(f"SUCCESS: Successfully saved {len(chunks)} items to the unified table.")
+
+    except Exception as e:
+        print(f"DATABASE ERROR: {str(e)}")
+        raise e
     finally:
         cur.close()
         conn.close()
