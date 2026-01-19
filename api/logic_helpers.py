@@ -8,21 +8,18 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
-# Models from your notebook
-class DocumentMetadata(BaseModel):
-    source_file: str
-    file_type: str
-    page_number: int
-    corpus_category: str
-    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
-class LaborArticleChunk(BaseModel):
-    article_number: int
-    old_article_number: Optional[int] = None
+class LegalMetadata(BaseModel):
+    source_file: str
+    jurisdiction: str    # "PH" or "HK"
+    corpus_category: str # "wages", "contracts", etc.
+
+class LegalOrdinanceChunk(BaseModel):
+    section_id: str      # "Art. 1" or HK Section "10A"
     title: str
     content: str
-    is_repealed: bool = False
-    metadata: DocumentMetadata
+    is_repealed: bool
+    metadata: LegalMetadata
 
 def identify_document_pattern(sample_text, api_key):
     """Uses GPT-OSS Free to identify document type: PHILIPPINES, HONG_KONG, or GENERIC."""
@@ -67,8 +64,7 @@ def identify_document_pattern(sample_text, api_key):
         print(f"Router Error (Passing through to Regex): {e}")
         return "PHILIPPINES"  # Default fallback
     
-def parse_and_validate(pdf_bytes, api_key):
-    # 1. Open and extract text
+def parse_sensitive_legal_text(pdf_bytes, filename):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     full_text = "".join([page.get_text() for page in doc])
     
@@ -101,38 +97,36 @@ def parse_philippine_code(full_text):
         return []
 
     chunks = []
-    ROUTING_RULES = {
-        "wages": ["wage", "salary", "pay", "overtime", "payroll", "deduction", "night shift"],
-        "contracts": ["contract", "dismissal", "tenure", "termination", "probationary", "resignation"],
-    }
+    matches = list(pattern.finditer(full_text))
 
-    # Re-looping with the 3-part split structure
-    for i in range(1, len(parts), 3):
-        art_num = parts[i]
-        old_num = parts[i+1]
-        content = parts[i+2].strip() if (i+2) < len(parts) else ""
+    # 2. Capture Preamble (Text before the first match)
+    if matches and matches[0].start() > 0:
+        preamble = full_text[:matches[0].start()].strip()
+        if len(preamble) > 5:
+            chunks.append(LegalOrdinanceChunk(
+                section_id="PREAMBLE",
+                title="Introductory Provisions",
+                content=preamble,
+                is_repealed=False,
+                metadata=LegalMetadata(source_file=filename, jurisdiction=jurisdiction, corpus_category="meta")
+            ))
+
+    # 3. Capture all sections without gaps
+    for i, match in enumerate(matches):
+        start = match.end()
+        end = matches[i+1].start() if i+1 < len(matches) else len(full_text)
+        content = full_text[start:end].strip()
         
-        if not content: continue
+        # Identification based on jurisdiction
+        sec_id = match.group(1)
+        title = match.group(2) if is_hk else content.split('\n')[0][:100]
 
-        # Determine category based on keywords
-        category = "general"
-        for cat, keywords in ROUTING_RULES.items():
-            if any(k in content.lower() for k in keywords):
-                category = cat
-                break
-
-        chunks.append(LaborArticleChunk(
-            article_number=int(art_num),
-            old_article_number=int(old_num) if old_num else None,
-            title=content.split('\n')[0][:100],
+        chunks.append(LegalOrdinanceChunk(
+            section_id=sec_id,
+            title=title,
             content=content,
             is_repealed="repealed" in content.lower(),
-            metadata=DocumentMetadata(
-                source_file="upload.pdf", 
-                file_type="legal_code", 
-                page_number=0, 
-                corpus_category=category
-            )
+            metadata=LegalMetadata(source_file=filename, jurisdiction=jurisdiction, corpus_category="general")
         ))
     
     print(f"DEBUG: Extracted {len(chunks)} Philippine articles.")
@@ -191,49 +185,52 @@ def parse_hong_kong_ordinance(full_text):
     return chunks
 
 def save_to_supabase(chunks, db_url):
-    """Saves to Supabase and automatically creates tables based on notebook categories."""
+    """
+    Saves unified legal chunks to the 'labor_ordinances' table.
+    Ensures that data for both PH and HK jurisdictions are stored correctly.
+    """
+    if not chunks:
+        print("DEBUG: No chunks to save.")
+        return
+
+    # Connection setup using the Transaction Pooler URL (Port 6543)
     conn = psycopg2.connect(db_url)
-    conn.autocommit = True 
+    conn.autocommit = True
     cur = conn.cursor()
+
     try:
+        # 1. OPTIONAL: Clear the database for a fresh upload
+        # Only use this if you want to replace all data every time you upload
+        # cur.execute("TRUNCATE TABLE labor_ordinances RESTART IDENTITY;")
+
+        # 2. Prepared Statement for efficiency and security
+        query = """
+            INSERT INTO labor_ordinances (
+                jurisdiction, 
+                section_id, 
+                title, 
+                content, 
+                is_repealed, 
+                source_file
+            ) VALUES (%s, %s, %s, %s, %s, %s);
+        """
+
         for chunk in chunks:
-            # Use the corpus_category from metadata to determine the table name
-            table = chunk.metadata.corpus_category
+            # Map the Pydantic model fields to database columns
+            cur.execute(query, (
+                chunk.metadata.jurisdiction,
+                chunk.section_id,
+                chunk.title,
+                chunk.content,
+                chunk.is_repealed,
+                chunk.metadata.source_file
+            ))
             
-            # 1. Create the table with the specific columns from your notebook
-            cur.execute(f"""
-                CREATE TABLE IF NOT EXISTS {table} (
-                    id SERIAL PRIMARY KEY, 
-                    article_number INT, 
-                    old_article_number INT, 
-                    title TEXT, 
-                    content TEXT, 
-                    is_repealed BOOLEAN,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            
-            # 2. Check if article already exists
-            cur.execute(
-                f"SELECT id FROM {table} WHERE article_number = %s AND old_article_number IS NOT DISTINCT FROM %s",
-                (chunk.article_number, chunk.old_article_number)
-            )
-            
-            if cur.fetchone():
-                # Update existing article
-                cur.execute(
-                    f"""UPDATE {table} 
-                       SET title = %s, content = %s, is_repealed = %s, created_at = CURRENT_TIMESTAMP
-                       WHERE article_number = %s AND old_article_number IS NOT DISTINCT FROM %s""",
-                    (chunk.title, chunk.content, chunk.is_repealed, chunk.article_number, chunk.old_article_number)
-                )
-            else:
-                # Insert new article
-                cur.execute(
-                    f"""INSERT INTO {table} (article_number, old_article_number, title, content, is_repealed) 
-                       VALUES (%s, %s, %s, %s, %s)""",
-                    (chunk.article_number, chunk.old_article_number, chunk.title, chunk.content, chunk.is_repealed)
-                )
+        print(f"SUCCESS: Successfully saved {len(chunks)} items to the unified table.")
+
+    except Exception as e:
+        print(f"DATABASE ERROR: {str(e)}")
+        raise e
     finally:
         cur.close()
         conn.close()
