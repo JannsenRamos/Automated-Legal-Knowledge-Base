@@ -216,21 +216,37 @@ def save_to_supabase(chunks, db_url):
         """
 
         for chunk in chunks:
-            # Map the Pydantic model fields to database columns
-            cur.execute(query, (
-                chunk.metadata.jurisdiction,
-                chunk.section_id,
-                chunk.title,
-                chunk.content,
-                chunk.is_repealed,
-                chunk.metadata.source_file
-            ))
+            # Use the corpus_category from metadata to determine the table name
+            table = chunk.metadata.corpus_category
             
-        print(f"SUCCESS: Successfully saved {len(chunks)} items to the unified table.")
-
-    except Exception as e:
-        print(f"DATABASE ERROR: {str(e)}")
-        raise e
+            # 1. Create the table with the specific columns from your notebook
+            cur.execute(f"""
+                CREATE TABLE IF NOT EXISTS {table} (
+                    id SERIAL PRIMARY KEY, 
+                    article_number INT, 
+                    old_article_number INT, 
+                    title TEXT, 
+                    content TEXT, 
+                    is_repealed BOOLEAN,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(article_number, old_article_number)
+                );
+            """)
+            
+            # 2. Insert the data with ON CONFLICT to prevent duplicates
+            cur.execute(
+                f"""
+                INSERT INTO {table} (article_number, old_article_number, title, content, is_repealed) 
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (article_number, old_article_number) 
+                DO UPDATE SET 
+                    title = EXCLUDED.title,
+                    content = EXCLUDED.content,
+                    is_repealed = EXCLUDED.is_repealed,
+                    created_at = CURRENT_TIMESTAMP
+                """, 
+                (chunk.article_number, chunk.old_article_number, chunk.title, chunk.content, chunk.is_repealed)
+            )
     finally:
         cur.close()
         conn.close()
