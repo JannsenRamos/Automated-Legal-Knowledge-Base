@@ -199,9 +199,6 @@ def save_to_supabase(chunks, db_url):
     cur = conn.cursor()
 
     try:
-        # 1. OPTIONAL: Clear the database for a fresh upload
-        # Only use this if you want to replace all data every time you upload
-        # cur.execute("TRUNCATE TABLE labor_ordinances RESTART IDENTITY;")
 
         # 2. Prepared Statement for efficiency and security
         query = """
