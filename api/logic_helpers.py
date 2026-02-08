@@ -31,18 +31,27 @@ class ContractClause(BaseModel):
     rationale: str = ""
 
 
-ROUTING_RULES = {
-    "PH": {
-        "wages": ["wage", "salary", "13th month", "overtime", "payroll", "deduction"],
-        "contracts": ["dismissal", "termination", "probationary", "resignation", "tenure"],
-        "benefits": ["maternity", "paternity", "retirement", "holiday", "sss", "pag-ibig"],
-    },
-    "HK": {
-        "wages": ["wage", "payment", "deduction", "overtime", "end of year payment"],
-        "contracts": ["notice", "termination", "probation", "summary dismissal", "damages"],
-        "benefits": ["maternity", "paternity", "leave", "medical certificate", "rest day"],
+def classify_clause(text: str):
+    text_lower = text.lower()
+
+    categories = {
+        "wages": ["salary", "remuneration", "pay", "wage", "hkd", "php", "deduction", "allowance"],
+        "leave": ["leave", "holiday", "sick", "vacation", "rest day", "absence", "off-duty"],
+        "termination": ["notice", "terminate", "resign", "dismiss", "severance", "repatriation"],
+        "benefits": ["insurance", "medical", "13th month", "bonus", "food", "accommodation", "housing"],
+        "conditions": ["probation", "hours", "shift", "location", "job description", "duties"]
     }
-}
+
+    scores = {cat: 0 for cat in categories.keys()}
+
+    for category, keywords in categories.items():
+        for word in keywords:
+            if word in text_lower:
+                scores[category] += 1
+
+    best_cat = max(scores, key=scores.get)
+    
+    return best_cat if scores[best_cat] > 0 else "general"
 
 def extract_legal_text(pdf_bytes, filename):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -76,10 +85,9 @@ def extract_legal_text(pdf_bytes, filename):
             continue
 
         category = "general"
-        rules = ROUTING_RULES.get(jurisdiction, {})
-        for cat, keywords in rules.items():
-            if any(k in content.lower() for k in keywords):
-                category = cat; break
+        rules = classify_clause(content)
+        if rules != "general":
+            category = rules
 
         # D. Structural Mapping
         sec_id = matches[i].group(1)
@@ -102,30 +110,20 @@ def extract_legal_text(pdf_bytes, filename):
     return chunks
 
 def segment_contract_clauses(contract_text, jurisdiction):
-    """
-    Splits an unstructured contract into functional buckets for auditing.
-   
-    """
     segments = []
-    # We reuse your ROUTING_RULES but as 'Heuristic Anchors'
-    rules = ROUTING_RULES.get(jurisdiction, {})
-    
-    # Simple segmentation by newline/paragraph for initial audit
+    # Splitting by double newline assumes standard contract formatting
     paragraphs = contract_text.split('\n\n') 
     
     for para in paragraphs:
-        if len(para) < 20: continue # Ignore signatures/headers
+        clean_para = para.strip()
+        if len(clean_para) < 30: continue # Skip noise/headers
         
-        # Categorize the paragraph based on keywords
-        assigned_cat = "general"
-        for cat, keywords in rules.items():
-            if any(k in para.lower() for k in keywords):
-                assigned_cat = cat
-                break
+        # Use the new weighted classifier
+        assigned_cat = classify_clause(clean_para)
         
         segments.append(ContractClause(
             category=assigned_cat,
-            original_text=para.strip()
+            original_text=clean_para
         ))
     
     return segments
