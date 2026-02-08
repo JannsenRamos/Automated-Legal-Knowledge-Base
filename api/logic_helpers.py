@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import fitz  # PyMuPDF
 import psycopg2
 from pydantic import BaseModel, Field
@@ -138,37 +139,62 @@ def segment_contract_clauses(contract_text, jurisdiction):
     
     return segments
 
+def load_legal_rules():
+    """Loads the statutory floors from the root directory."""
+    try:
+        # Assumes legal_rules.json is in your project root
+        with open("legal_rules.json", "r") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"⚠️ Warning: Could not load legal_rules.json: {e}")
+        return {}
+
 def audit_contract(contract_clauses, db_url):
-    if not db_url:
-        raise ValueError("The database URL provided to the audit function is empty.")
-    
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    """
+    Week 3 Upgrade: Performs Rule-Based Validation against legal_rules.json.
+    """
+    rules = load_legal_rules()
     audited_results = []
 
     for clause in contract_clauses:
-        # 1. Fetch the legal baseline for this category
-        cur.execute(
-            "SELECT content, section_id FROM labor_ordinances WHERE category = %s AND jurisdiction = %s",
-            (clause.category, "HK") # Assuming HK for this example
-        )
-        laws = cur.fetchall()
-
-        if clause.category == "wages":
-            # Heuristic: Check for 'deductions' which are highly regulated
-            if "deduct" in clause.original_text.lower():
-                clause.risk_score = "MEDIUM"
-                clause.rationale = "Contract permits wage deductions. Cross-check with HK Cap 57 Sec. 32 for compliance."
+        jurisdiction = "HK" # Dynamically set this if needed from the request
+        risk_level = "LOW"
+        rationale = "No obvious statutory deviations detected."
         
-        # 3. Handle Ambiguity (The 'General' Bucket)
-        if clause.category == "general" and len(clause.original_text) > 200:
-            clause.risk_score = "HIGH"
-            clause.rationale = "Uncategorized long-form text detected. High potential for hidden compliance risks."
+        # 1. Extraction: Find the first currency/number in the clause
+        # Regex looks for numbers like 4,500 or 4500
+        amount_match = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\b", clause.original_text)
+        found_amount = float(amount_match.group(1).replace(',', '')) if amount_match else None
 
+        # 2. Rule Logic: Wages
+        if clause.category == "wages" and jurisdiction in rules:
+            min_wage = rules[jurisdiction]["wages"].get("min_allowable_wage")
+            
+            if found_amount and min_wage:
+                if found_amount < min_wage:
+                    risk_level = "CRITICAL"
+                    rationale = f"Salary {found_amount} is below the {jurisdiction} minimum of {min_wage}."
+            elif "deduct" in clause.original_text.lower():
+                risk_level = "MEDIUM"
+                rationale = "Wage deductions detected. Verify against Cap 57 Sec. 32 limits."
+
+        # 3. Rule Logic: Termination
+        if clause.category == "termination" and jurisdiction in rules:
+            min_notice = rules[jurisdiction]["termination"].get("notice_period_days")
+            if "immediate" in clause.original_text.lower() or "without notice" in clause.original_text.lower():
+                risk_level = "HIGH"
+                rationale = f"Termination without notice may violate the {min_notice}-day statutory requirement."
+
+        # 4. Handle Ambiguity
+        if clause.category == "general" and len(clause.original_text) > 150:
+            risk_level = "MEDIUM"
+            rationale = "Uncategorized long-form clause. Manual review recommended for hidden obligations."
+
+        # Update the Pydantic model fields
+        clause.risk_score = risk_level
+        clause.rationale = rationale
         audited_results.append(clause)
 
-    cur.close()
-    conn.close()
     return audited_results
 
 def save_to_supabase(chunks, db_url):

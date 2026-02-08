@@ -1,0 +1,20 @@
+{
+  "HK": {
+    "wages": {
+      "min_allowable_wage": 4870,
+      "food_allowance_min": 1236,
+      "max_deduction_limit": 300
+    },
+    "termination": {
+      "notice_period_days": 30
+    }
+  },
+  "PH": {
+    "benefits": {
+      "thirteenth_month_required": true
+    },
+    "conditions": {
+      "max_probation_months": 6
+    }
+  }
+}
