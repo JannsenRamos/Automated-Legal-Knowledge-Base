@@ -124,19 +124,31 @@ def extract_legal_text(pdf_bytes, filename):
 
 def segment_contract_clauses(contract_text, jurisdiction):
     segments = []
-    paragraphs = contract_text.split('\n\n') 
     
-    for para in paragraphs:
-        clean_para = para.strip()
-        if len(clean_para) < 30: continue # Skip noise/headers
+    # regex explanation:
+    # (?=...) is a lookahead. It looks for a newline followed by a digit and a dot (1.1).
+    # This splits the text *at* the number without deleting the number itself.
+    pattern = r'\n(?=\d+\.\d+|\bSECTION\b)'
+    
+    # Split the contract into logical blocks
+    raw_blocks = re.split(pattern, contract_text)
+    
+    for block in raw_blocks:
+        clean_block = block.strip()
         
-        assigned_cat = classify_clause(clean_para)
+        # Filter out tiny noise, but keep anything that looks like a legal statement
+        if len(clean_block) < 30: 
+            continue 
+            
+        # The Classifier now has the full context (e.g., "1.1 The salary is...")
+        assigned_cat = classify_clause(clean_block)
         
         segments.append(ContractClause(
             category=assigned_cat,
-            original_text=clean_para
+            original_text=clean_block
         ))
     
+    print(f"LICE grouped the contract into {len(segments)} contextual blocks.")
     return segments
 
 def load_legal_rules():
