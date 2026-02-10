@@ -1,4 +1,15 @@
 {
+  "global_config": {
+    "forbidden_terms": [
+      "bond",
+      "placement fee",
+      "exit fee",
+      "deployment fee",
+      "safety deposit",
+      "unsuitable",
+      "immediate deduction"
+    ]
+  },
   "HK": {
     "wages": {
       "min_allowable_wage": 4870,

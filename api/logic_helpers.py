@@ -39,7 +39,8 @@ def classify_clause(text: str):
         "leave": ["leave", "holiday", "sick", "vacation", "rest day", "absence", "off-duty"],
         "termination": ["notice", "terminate", "resign", "dismiss", "severance", "repatriation"],
         "benefits": ["insurance", "medical", "13th month", "bonus", "food", "accommodation", "housing"],
-        "conditions": ["probation", "hours", "shift", "location", "job description", "duties"]
+        "conditions": ["probation", "hours", "shift", "location", "job description", "duties"],
+        "fees": ["fee", "charge", "payment", "deployment", "exit fee", "processing", "bond", "placement"]
     }
 
     scores = {cat: 0 for cat in categories.keys()}
@@ -125,8 +126,6 @@ def extract_legal_text(pdf_bytes, filename):
 def segment_contract_clauses(contract_text, jurisdiction):
     segments = []
     
-    # regex explanation:
-    # (?=...) is a lookahead. It looks for a newline followed by a digit and a dot (1.1).
     # This splits the text *at* the number without deleting the number itself.
     pattern = r'\n(?=\d+\.\d+|\bSECTION\b)'
     
@@ -162,9 +161,6 @@ def load_legal_rules():
         return {}
 
 def audit_contract(contract_clauses, db_url):
-    """
-    Week 3 Upgrade: Performs Rule-Based Validation against legal_rules.json.
-    """
     rules = load_legal_rules()
     audited_results = []
 
@@ -201,7 +197,17 @@ def audit_contract(contract_clauses, db_url):
         if clause.category == "general" and len(clause.original_text) > 150:
             risk_level = "MEDIUM"
             rationale = "Uncategorized long-form clause. Manual review recommended for hidden obligations."
+        
+        # 5. Specific Flag: Fees
+        if clause.category == "fees":
+            clause.risk_score = "CRITICAL"
+            clause.rationale = "Potential illegal recruitment/placement fee detected. Charging workers for deployment is prohibited under most OFW protection laws."
 
+        elif clause.category == "conditions":
+            if "12 hours" in clause.original_text.lower() or "no overtime" in clause.original_text.lower():
+                clause.risk_score = "HIGH"
+                clause.rationale = "Excessive working hours or lack of overtime pay violates standard employment protections."
+                
         # Update the Pydantic model fields
         clause.risk_score = risk_level
         clause.rationale = rationale
