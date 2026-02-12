@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from generate_report.report_generator import generate_pdf_report
 
 # 1. INITIALIZATION: Load .env before importing logic that might use it
 load_dotenv()
@@ -38,10 +39,9 @@ def health_check():
 
 @app.post("/analyze_contract")
 async def analyze_contract(file: UploadFile = File(...), jurisdiction: str = "HK"):
-    """
-    Main Analysis Endpoint:
-    1. Receives File -> 2. Segments/Classifies -> 3. Audits against Supabase
-    """
+
+    report_path = generate_pdf_report(grouped_analysis, file.filename)
+
     # Defensive check for the error you encountered
     if not DB_URL:
         raise HTTPException(
