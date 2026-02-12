@@ -17,12 +17,13 @@ class LICEReport(FPDF):
         self.cell(0, 10, f'Page {self.page_no()} | LICE Engine | Confidential Legal Audit', 0, 0, 'C')
 
 def generate_pdf_report(grouped_analysis, filename):
-    """
-    Takes the grouped analysis and outputs a formatted PDF file.
-    """
-    # Ensure a reports directory exists
-    if not os.path.exists("reports"):
-        os.makedirs("reports")
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    reports_dir = os.path.join(base_dir, "reports")
+    
+    if not os.path.exists(reports_dir):
+        os.makedirs(reports_dir)
+        print(f"Created missing reports directory at: {reports_dir}")
 
     pdf = LICEReport()
     pdf.add_page()
@@ -34,35 +35,34 @@ def generate_pdf_report(grouped_analysis, filename):
     pdf.ln(5)
 
     # Define risk priorities for the report
-    priorities = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
-
-    for risk_level in priorities:
+    for risk_level in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
         clauses = grouped_analysis.get(risk_level, [])
         if not clauses:
             continue
             
-        # Color Coding: Red for Critical, Orange for High
-        if risk_level == "CRITICAL": pdf.set_text_color(220, 20, 60)
-        elif risk_level == "HIGH": pdf.set_text_color(255, 140, 0)
-        else: pdf.set_text_color(0, 0, 0)
-        
+        # Style the risk headers
         pdf.set_font('Arial', 'B', 12)
         pdf.cell(0, 10, f"{risk_level} RISKS FOUND: {len(clauses)}", 0, 1)
-        pdf.ln(2)
-        pdf.set_text_color(0, 0, 0) # Reset to black
         
         for i, clause in enumerate(clauses):
+            category = clause.get('category', 'N/A').upper()
+            text = clause.get('original_text', 'No text found')
+            rationale = clause.get('rationale', 'No rationale provided')
+
             pdf.set_font('Arial', 'B', 10)
-            pdf.multi_cell(0, 8, f"Section: {clause.category.upper()}")
+            pdf.multi_cell(0, 8, f"Section: {category}")
             
             pdf.set_font('Arial', '', 10)
-            pdf.set_fill_color(245, 245, 245) # Light grey background for the quote
-            pdf.multi_cell(0, 8, f"Contract Text: \"{clause.original_text}\"", fill=True)
+            pdf.set_fill_color(245, 245, 245)
+            pdf.multi_cell(0, 8, f"Contract Text: \"{text}\"", fill=True)
             
             pdf.set_font('Arial', 'I', 10)
-            pdf.multi_cell(0, 8, f"Rationale & Citation: {clause.rationale}")
+            pdf.multi_cell(0, 8, f"Rationale & Citation: {rationale}")
             pdf.ln(5)
             
-    report_filename = f"reports/LICE_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    pdf.output(report_filename)
-    return report_filename
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    report_filename = f"LICE_{timestamp}.pdf"
+    report_path = os.path.join(reports_dir, report_filename)
+    
+    pdf.output(report_path)
+    return report_path

@@ -2,7 +2,9 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from generate_report.report_generator import generate_pdf_report
+
 
 # 1. INITIALIZATION: Load .env before importing logic that might use it
 load_dotenv()
@@ -39,41 +41,51 @@ def health_check():
 
 @app.post("/analyze_contract")
 async def analyze_contract(file: UploadFile = File(...), jurisdiction: str = "HK"):
-
-    report_path = generate_pdf_report(grouped_analysis, file.filename)
-
-    # Defensive check for the error you encountered
-    if not DB_URL:
-        raise HTTPException(
-            status_code=500, 
-            detail="Server Config Error: SUPABASE_DB_URL is missing from .env"
-        )
-
-    print(f"Processing upload: {file.filename}")
+    content_bytes = await file.read()
+    text = content_bytes.decode('utf-8', errors='ignore')
     
+    # 1. SEGMENT & CLASSIFY
+    clauses = segment_contract_clauses(text, jurisdiction)
+
+    # 2. AUDIT (This creates the 'results' list)
+    results = audit_contract(clauses, DB_URL)
+
+    # 3. GROUPING (This creates the 'grouped_analysis' variable)
+    grouped_analysis = {
+        "CRITICAL": [c for c in results if c.risk_score == "CRITICAL"],
+        "HIGH": [c for c in results if c.risk_score == "HIGH"],
+        "MEDIUM": [c for c in results if c.risk_score == "MEDIUM"],
+        "LOW": [c for c in results if c.risk_score == "LOW"]
+    }
+
+    # 4. SUMMARY (This creates the 'summary' variable)
+    summary = {
+        "total_clauses": len(results),
+        "critical_count": len(grouped_analysis["CRITICAL"]),
+        "is_compliant": len(grouped_analysis["CRITICAL"]) == 0
+    }
+
+    # 5. RETURN (Now the variables are defined!)
+    return {
+        "filename": file.filename,
+        "summary": summary,
+        "analysis": grouped_analysis
+    }
+    
+from fastapi import Body # Add this import at the top
+
+@app.post("/generate_report")
+async def report_endpoint(grouped_analysis: dict = Body(...), filename: str = Body(...)):
+    """
+    Uses Body(...) to ensure FastAPI correctly parses the incoming JSON payload.
+    """
     try:
-        # Read the file content
-        content_bytes = await file.read()
-        
-        # Determine decoding based on file extension
-        filename = file.filename.lower()
-        if filename.endswith(".txt"):
-            text = content_bytes.decode('utf-8', errors='ignore')
-        else:
-            text = content_bytes.decode('utf-8', errors='ignore') 
-            # For PDFs, you would implement the logic from logic_helpers to extract text
-        clauses = segment_contract_clauses(text, jurisdiction)
-
-        # This compares each block to the laws in my database and returns a list of results with compliance status and deviation notes
-        results = audit_contract(clauses, DB_URL)
-
-        return {
-            "filename": file.filename,
-            "jurisdiction": jurisdiction,
-            "clause_count": len(results),
-            "analysis": results
-        }
-
+        path = generate_pdf_report(grouped_analysis, filename)
+        return FileResponse(
+            path, 
+            media_type='application/pdf', 
+            filename=f"LICE_Audit_{filename}.pdf"
+        )
     except Exception as e:
-        print(f"Analysis Failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Engine Error: {str(e)}")
+        print(f"PDF Generation Failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
