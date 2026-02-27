@@ -69,6 +69,23 @@ if 'report' in st.session_state and st.session_state.report:
     m1, m2, m3 = st.columns(3)
     m1.metric("Compliance Score", f"{max(0, 100 - int(report.total_risk))}%")
     m2.metric("Total Risk Weight", f"{report.total_risk:.2f}")
+
+    score = report.total_risk / len(report.analysis) # Calculate average risk per clause
+
+    if score > 8:
+        status_label = "CRITICAL VIOLATION"
+        status_color = "red"
+    elif score > 5:
+        status_label = "HIGH RISK"
+        status_color = "orange"
+    elif score > 2:
+        status_label = "MEDIUM RISK"
+        status_color = "blue"
+    else:
+        status_label = "LOW RISK / COMPLIANT"
+        status_color = "green"
+
+    st.markdown(f"### Overall Audit Status: :{status_color}[{status_label}]")
     
     status = "HIGH RISK" if report.total_risk > 15 else "LOW RISK"
     m3.subheader(f"Status: {status}")
