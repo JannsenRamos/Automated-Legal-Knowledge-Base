@@ -109,9 +109,8 @@ def analyze_contract_risk(chunks: list, detected_jurisdiction: str, rules_path: 
     analysis_results = []
     total_risk_accumulation = 0.0
 
-    # FIX: Use 'chunk' (singular) to iterate through 'chunks' (plural)
     for chunk in chunks:
-        # Pass 1: Forbidden Term Check (Hard Logic)
+        
         found_forbidden = [term for term in forbidden_terms if term.lower() in chunk.lower()]
         
         # Pass 2: Semantic Analysis (ML Logic)
