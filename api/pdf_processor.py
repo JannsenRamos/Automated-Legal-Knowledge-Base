@@ -34,23 +34,14 @@ def get_text_and_jurisdiction(uploaded_file_bytes, filename):
     if not full_text.strip():
         return [], "UNKNOWN"
 
-    # --- STEP 2: CONTEXTUAL NORMALIZATION ---
-    # PDFs often insert newlines mid-sentence. 
-    # This regex joins lines that don't end in a period or double-newline.
-    # It turns: "The employee\n shall receive" -> "The employee shall receive"
     normalized_text = re.sub(r'(?<!\n)\n(?!\n)', ' ', full_text)
 
-    # --- STEP 3: SEMANTIC CHUNKING ---
-    # Split by double newlines or common legal numbering (e.g., "1. ", "Section 2")
-    # This ensures each item in the list is a complete 'Legal Clause'
     raw_chunks = re.split(r'\n\n|(?=\d+\.\s)|(?=\bSECTION\b)', normalized_text)
     
     # Filter out empty chunks and tiny fragments (noise)
     # 40 characters is roughly the minimum for a meaningful legal statement
     final_chunks = [c.strip() for c in raw_chunks if len(c.strip()) > 40]
 
-    # --- STEP 4: JURISDICTION DETECTION ---
-    # We analyze the first 3 chunks (usually contains the header/title)
     detection_window = " ".join(final_chunks[:3]).lower()
     
     ph_anchors = ["poea", "republic act", "dole", "philippines", "art.", "pna", "owwa"]

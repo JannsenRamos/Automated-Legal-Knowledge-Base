@@ -50,6 +50,17 @@ if uploaded_file:
             report = analyze_contract_risk(raw_text, jurisdiction, "legal_rules.json")
             st.session_state.report = report
 
+with st.sidebar:
+    st.divider()
+    st.markdown("### 🗺️ Risk Score Legend")
+    st.markdown("""
+    - **0-2 (Low):** Compliant phrasing.
+    - **2-5 (Medium):** Non-standard wording. 
+    - **5-8 (High):** Possible statutory violation.
+    - **8-10 (Critical):** Illegal/Prohibited terms.
+    """)
+    st.caption("Score = (1 - Similarity) × Severity Weight")
+
 # 4. Display Results (Using the Pydantic Object)
 if 'report' in st.session_state and st.session_state.report:
     report = st.session_state.report
