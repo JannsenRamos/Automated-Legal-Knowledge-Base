@@ -1,110 +1,108 @@
 import streamlit as st
-import requests
-import os
+import pandas as pd
+import plotly.express as px
+from api import extract_legal_text, analyze_contract_risk, get_text_and_jurisdiction
+from api import generate_pdf_report
 
-# 1. Page Configuration & Styling
 st.set_page_config(
     page_title="LICE Engine: Legal Audit",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # Custom CSS for a professional "Legal Tech" look
 st.markdown("""
     <style>
-    .reportview-container { background: #f0f2f6; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
+    .stExpander { border: 1px solid #e0e0e0; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title(" LICE: Legal Intelligence & Compliance Engine")
-st.markdown("### Specialized Audit for OFW Employment Contracts")
+st.title("LICE: Legal Intelligence & Compliance Engine")
+st.markdown("### Hybrid Risk Modeling for OFW Employment Contracts")
 st.divider()
 
-# 2. Configuration & State Management
-API_BASE_URL = "http://127.0.0.1:8000"
-
-if 'analysis_results' not in st.session_state:
-    st.session_state.analysis_results = None
-
-# 3. Sidebar Settings
+# 2. Sidebar Settings
 with st.sidebar:
-    st.header("Audit Settings")
-    jurisdiction = st.selectbox("Target Jurisdiction", ["HK", "PH"], help="Determines which statutory baseline to use for the audit.")
-    st.info("LICE compares your contract against local labor ordinances in real-time.")
+    st.header("Configuration")
+    jurisdiction = st.selectbox(
+        "Target Jurisdiction", 
+        ["HK", "PH"], 
+        help="Select the statutory baseline (e.g., HK Cap. 57 vs PH Labor Code)."
+    )
+    st.info("The system uses Semantic Similarity to detect deviations from mandatory labor floors.")
 
-# 4. File Upload Section
+# 3. File Upload Section
 uploaded_file = st.file_uploader("Upload Contract (PDF or Text)", type=['pdf', 'txt'])
 
 if uploaded_file:
-    # Trigger Analysis
-    if st.button("Run Comprehensive Audit"):
-        with st.spinner("LICE is classifying clauses and verifying statutory compliance..."):
-            files = {"file": (uploaded_file.name, uploaded_file.getvalue())}
-            params = {"jurisdiction": jurisdiction}
+    if st.button("Run Risk Analysis"):
+        with st.spinner("Analyzing document context..."):
+            file_bytes = uploaded_file.read()
             
-            try:
-                response = requests.post(f"{API_BASE_URL}/analyze_contract", files=files, params=params)
-                
-                if response.status_code == 200:
-                    # Store results in session state so they persist
-                    st.session_state.analysis_results = response.json()
-                else:
-                    st.error(f"Analysis failed. Backend Error: {response.text}")
-            except Exception as e:
-                st.error(f"Could not connect to the LICE Engine. Ensure FastAPI is running. Error: {e}")
+            # 1. Automatic Detection
+            raw_text, jurisdiction = get_text_and_jurisdiction(file_bytes, uploaded_file.name)
+            
+            # 2. Inform the user
+            st.info(f"Detected Jurisdiction: **{jurisdiction}**")
+            
+            # 3. Analyze
+            report = analyze_contract_risk(raw_text, jurisdiction, "legal_rules.json")
+            st.session_state.report = report
 
-# 5. Display Results (Only if analysis has been run)
-if st.session_state.analysis_results:
-    res = st.session_state.analysis_results
+# 4. Display Results (Using the Pydantic Object)
+if 'report' in st.session_state and st.session_state.report:
+    report = st.session_state.report
     
-    # DEFENSIVE CHECK: Ensure keys exist to prevent the KeyError you encountered
-    if "summary" in res and "analysis" in res:
-        summary = res["summary"]
-        analysis = res["analysis"]
+    # A. High-Level Metrics
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Compliance Score", f"{max(0, 100 - int(report.total_risk))}%")
+    m2.metric("Total Risk Weight", f"{report.total_risk:.2f}")
+    
+    status = "HIGH RISK" if report.total_risk > 15 else "LOW RISK"
+    m3.subheader(f"Status: {status}")
 
-        # A. High-Level Metrics
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Clauses Scanned", summary.get("total_clauses", 0))
-        m2.metric("Critical Violations", summary.get("critical_count", 0), delta_color="inverse")
-        
-        status = "NON-COMPLIANT" if not summary.get("is_compliant") else "✅ COMPLIANT"
-        m3.subheader(f"System Status: {status}")
+    st.divider()
 
-        st.divider()
+    # B. DATA SCIENCE VISUALIZATION (Showcase your DS skill)
+    col1, col2 = st.columns([1, 1])
+    
+    # Convert list of Pydantic objects to a DataFrame for Plotly
+    df_data = [
+        {"Category": c.category, "Risk": c.risk_score, "Confidence": c.confidence} 
+        for c in report.analysis
+    ]
+    df = pd.DataFrame(df_data)
 
-        # B. Risk Breakdown by Priority
-        for level in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]:
-            clauses = analysis.get(level, [])
-            if not clauses:
-                continue
-            
-            color = "red" if level == "CRITICAL" else "orange" if level == "HIGH" else "blue"
-            with st.expander(f"{level} PRIORITY ITEMS ({len(clauses)})", expanded=(level == "CRITICAL")):
-                for item in clauses:
-                    st.markdown(f"**Category:** `{item['category'].upper()}`")
-                    st.markdown(f"> \"{item['original_text']}\"")
-                    st.warning(f"**Rationale:** {item['rationale']}")
-                    st.divider()
+    with col1:
+        st.write("### Risk Heatmap")
+        fig = px.bar(df, x="Category", y="Risk", color="Risk",
+                     color_continuous_scale="Reds", title="Weighted Risk by Clause")
+        st.plotly_chart(fig, use_container_width=True)
 
-        # C. The PDF Report Generation Bridge
-        st.markdown("Formal Audit Report")
-        if st.button("Generate & Download PDF"):
-            with st.spinner("Compiling legal citations into PDF..."):
-                report_payload = {
-                    "grouped_analysis": analysis,
-                    "filename": uploaded_file.name
-                }
-                report_resp = requests.post(f"{API_BASE_URL}/generate_report", json=report_payload)
-                
-                if report_resp.status_code == 200:
-                    st.download_button(
-                        label="Save Audit PDF",
-                        data=report_resp.content,
-                        file_name=f"LICE_Audit_{uploaded_file.name}.pdf",
-                        mime="application/pdf"
-                    )
-                else:
-                    st.error("Failed to generate PDF. Check backend report_generator logs.")
-    else:
-        st.error("Engine Data Mismatch: The API response format is missing 'summary' or 'analysis' keys.")
-        st.json(res) # Show raw data for debugging
+    with col2:
+        st.write("### Extraction Confidence")
+        fig2 = px.scatter(df, x="Category", y="Confidence", size="Risk", color="Category",
+                          title="Model Confidence vs. Detected Risk")
+        st.plotly_chart(fig2, use_container_width=True)
+
+    # C. DETAILED AUDIT TRAIL
+    st.write("### Detailed Clause Analysis")
+    for item in report.analysis:
+        with st.expander(f"Category: {item.category.upper()} (Risk: {item.risk_score})"):
+            st.markdown(f"**Extracted Text:**")
+            st.caption(f"\"{item.extracted_text}\"")
+            st.info(f"**Legal Reference:** {item.violation_type}")
+            st.progress(item.confidence)
+            st.caption(f"Model Confidence: {item.confidence*100:.1f}%")
+
+    # D. REPORT GENERATION
+    # Inside app.py (bottom section)
+    if st.button("Download Formal Audit Report"):
+        pdf_bytes = generate_pdf_report(report, uploaded_file.name)
+        st.download_button(
+            label="Save PDF",
+            data=pdf_bytes,
+            file_name=f"LICE_Audit_{uploaded_file.name}.pdf",
+            mime="application/pdf"
+        )

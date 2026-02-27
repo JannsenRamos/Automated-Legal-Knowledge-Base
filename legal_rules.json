@@ -1,31 +1,49 @@
 {
   "global_config": {
-    "forbidden_terms": [
-      "bond",
-      "placement fee",
-      "exit fee",
-      "deployment fee",
-      "safety deposit",
-      "unsuitable",
-      "immediate deduction"
-    ]
+    "forbidden_terms": ["promissory note", "vouchers", "chits", "bond", "placement fee", "exit fee"]
   },
-  "HK": {
-    "wages": {
-      "min_allowable_wage": 4870,
-      "food_allowance_min": 1236,
-      "max_deduction_limit": 300
+  "benchmarks": [
+    {
+      "category": "conditions",
+      "jurisdiction": "PH",
+      "baseline": "The normal hours of work of any employee shall not exceed eight hours in a day. Employers must grant at least sixty minutes time-off for regular meals.",
+      "weight": 7.0,
+      "law_reference": "Labor Code Art. 83 & 85"
     },
-    "termination": {
-      "notice_period_days": 30
-    }
-  },
-  "PH": {
-    "benefits": {
-      "thirteenth_month_required": true
+    {
+      "category": "leave",
+      "jurisdiction": "PH",
+      "baseline": "It shall be the duty of every employer to provide each of his employees a rest period of not less than twenty-four consecutive hours after every six consecutive normal work days.",
+      "weight": 8.0,
+      "law_reference": "Labor Code Art. 91"
     },
-    "conditions": {
-      "max_probation_months": 6
+    {
+      "category": "wages",
+      "jurisdiction": "PH",
+      "baseline": "Wages shall be paid in legal tender and the use of tokens or chits is prohibited. Payment shall be made at least once every two weeks or twice a month at intervals not exceeding sixteen days.",
+      "weight": 10.0,
+      "law_reference": "Labor Code Art. 102 & 103"
+    },
+    {
+      "category": "termination",
+      "jurisdiction": "PH",
+      "baseline": "An employee shall not be terminated except for a just cause or when authorized by law. Termination requires at least one month advance notice or payment in lieu of notice.",
+      "weight": 9.5,
+      "law_reference": "Labor Code Art. 279 & 283"
+    },
+    {
+      "category": "benefits",
+      "jurisdiction": "HK",
+      "baseline": "A female employee is entitled to 14 weeks of paid maternity leave. The employer must not terminate the contract during pregnancy except for summary dismissal.",
+      "weight": 9.0,
+      "law_reference": "HK Employment Ordinance Cap. 57"
+    },
+    {
+      "category": "benefits",
+      "jurisdiction": "PH",
+      "baseline": "Female employees are entitled to maternity leave for the first four deliveries. Every employee who has rendered at least one year of service is entitled to a service incentive leave of five days with pay.",
+      "weight": 8.5,
+      "law_reference": "RA 11210 / Labor Code Art. 95"
     }
-  }
+  ]
 }

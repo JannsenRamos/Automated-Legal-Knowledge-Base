@@ -1,9 +1,21 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-python-multipart==0.0.6
-psycopg2-binary==2.9.9
-pymupdf==1.23.8
-langchain-openai==0.1.0
-pydantic==2.5.0
-python-dotenv==1.0.0
-pandas==2.1.3
+# --- Frontend & UI ---
+streamlit>=1.31.0
+plotly>=5.18.0
+pandas>=2.1.0
+
+# --- Data Science & NLP (The Brain) ---
+sentence-transformers>=2.3.0
+torch>=2.1.0
+numpy>=1.26.0
+
+# --- Extraction & OCR (The Eyes) ---
+pymupdf>=1.23.0    # This is fitz
+pytesseract>=0.3.0
+pdf2image>=1.17.0
+Pillow>=10.2.0
+
+# --- Backend & Engineering (The Bones) ---
+pydantic>=2.5.0
+psycopg2-binary>=2.9.0
+fpdf2>=2.7.0
+python-dotenv>=1.0.0
