@@ -1,6 +1,7 @@
 import re
 import json
 import psycopg2
+from torch import chunk
 from .schemas import ClauseAnalysis, FullContractReport 
 from sentence_transformers import SentenceTransformer, util
 
@@ -110,6 +111,11 @@ def analyze_contract_risk(chunks: list, detected_jurisdiction: str, rules_path: 
     total_risk_accumulation = 0.0
 
     for chunk in chunks:
+
+        if isinstance(chunk, (bytes, bytearray)):
+            chunk = chunk.decode('utf-8', errors='ignore')
+    
+        emb_user = model.encode(chunk, convert_to_tensor=True)
         
         found_forbidden = [term for term in forbidden_terms if term.lower() in chunk.lower()]
         

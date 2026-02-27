@@ -28,6 +28,7 @@ class ClauseAnalysis(BaseModel):
     confidence: float
     violation_type: str
     extracted_text: str
+    rationale: str = ""
 
 class FullContractReport(BaseModel):
     total_risk: float
