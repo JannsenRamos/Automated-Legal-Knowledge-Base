@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from generate_report.report_generator import generate_pdf_report
+from .report_generator import generate_pdf_report
 
 
 # 1. INITIALIZATION: Load .env before importing logic that might use it
@@ -11,7 +11,7 @@ load_dotenv()
 
 # Import your LICE logic and models
 # Ensure these are correctly referenced based on your folder structure
-from .logic_helpers import segment_contract_clauses, audit_contract
+from .logic_helpers import segment_contract_clauses, analyze_contract_risk
 
 app = FastAPI(title="LICE Engine: Legal Intelligence & Compliance Engine")
 
@@ -42,34 +42,29 @@ def health_check():
 @app.post("/analyze_contract")
 async def analyze_contract(file: UploadFile = File(...), jurisdiction: str = "HK"):
     content_bytes = await file.read()
-    text = content_bytes.decode('utf-8', errors='ignore')
-    
-    # 1. SEGMENT & CLASSIFY
-    clauses = segment_contract_clauses(text, jurisdiction)
 
-    # 2. AUDIT (This creates the 'results' list)
-    results = audit_contract(clauses, DB_URL)
+    # 1. EXTRACT TEXT & DETECT JURISDICTION
+    from .pdf_processor import get_text_and_jurisdiction
+    chunks, detected_jurisdiction = get_text_and_jurisdiction(content_bytes, file.filename)
+    active_jurisdiction = detected_jurisdiction if detected_jurisdiction != "UNKNOWN" else jurisdiction
 
-    # 3. GROUPING (This creates the 'grouped_analysis' variable)
-    grouped_analysis = {
-        "CRITICAL": [c for c in results if c.risk_score == "CRITICAL"],
-        "HIGH": [c for c in results if c.risk_score == "HIGH"],
-        "MEDIUM": [c for c in results if c.risk_score == "MEDIUM"],
-        "LOW": [c for c in results if c.risk_score == "LOW"]
-    }
+    # 2. ANALYZE (Semantic risk scoring via SentenceTransformer)
+    report = analyze_contract_risk(chunks, active_jurisdiction, "legal_rules.json")
 
-    # 4. SUMMARY (This creates the 'summary' variable)
+    # 3. SUMMARY
+    critical_clauses = [c for c in report.analysis if c.risk_score >= 8.0]
     summary = {
-        "total_clauses": len(results),
-        "critical_count": len(grouped_analysis["CRITICAL"]),
-        "is_compliant": len(grouped_analysis["CRITICAL"]) == 0
+        "total_clauses": len(report.analysis),
+        "critical_count": len(critical_clauses),
+        "total_risk": report.total_risk,
+        "detected_jurisdiction": active_jurisdiction,
+        "is_compliant": len(critical_clauses) == 0
     }
 
-    # 5. RETURN (Now the variables are defined!)
     return {
         "filename": file.filename,
         "summary": summary,
-        "analysis": grouped_analysis
+        "analysis": [c.model_dump() for c in report.analysis]
     }
     
 from fastapi import Body # Add this import at the top

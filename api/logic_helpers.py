@@ -1,14 +1,7 @@
 import re
 import json
-import psycopg2
-from torch import chunk
-from .schemas import ClauseAnalysis, FullContractReport 
+from .schemas import ClauseAnalysis, FullContractReport
 from sentence_transformers import SentenceTransformer, util
-
-from .schemas import (
-    ClauseAnalysis, 
-    FullContractReport, 
-)
 
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
@@ -44,57 +37,6 @@ def load_legal_rules(path="legal_rules.json"):
         print(f"Error loading rules from {path}: {e}")
         return {}
 
-def audit_contract(contract_clauses, db_url):
-    rules = load_legal_rules()
-    audited_results = []
-    forbidden_list = rules.get("global_config", {}).get("forbidden_terms", [])
-
-    # Establish DB connection for citations
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
-
-    for clause in contract_clauses:
-        jurisdiction = "HK" # Dynamically set this in Week 4
-        text_lower = clause.original_text.lower()
-        risk_level = "LOW"
-        rationale = "No obvious statutory deviations detected."
-        citation = "General Labor Principles"
-
-        #1. GLOBAL SAFETY NET
-        for term in forbidden_list:
-            if term in text_lower:
-                risk_level = "CRITICAL"
-                rationale = f"Forbidden term detected: '{term}'. This may indicate illegal practices."
-                break
-
-        #2. STATUTORY CITATION
-        cur.execute(
-            "SELECT section_id, title FROM labor_ordinances WHERE category = %s AND jurisdiction = %s LIMIT 1",
-            (clause.category, jurisdiction)
-        )
-        law_match = cur.fetchone()
-        if law_match:
-            citation = f"{jurisdiction} Law: {law_match[1]} ({law_match[0]})"
-
-        #3. CATEGORY SPECIFIC MATH (Wages Example)
-        if risk_level != "CRITICAL" and clause.category == "wages":
-            min_wage = rules.get(jurisdiction, {}).get("wages", {}).get("min_allowable_wage")
-            amount_match = re.search(r"(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\b", clause.original_text)
-            found_amount = float(amount_match.group(1).replace(',', '')) if amount_match else None
-
-            if found_amount and min_wage and found_amount < min_wage:
-                risk_level = "CRITICAL"
-                rationale = f"Salary {found_amount} is below the statutory minimum of {min_wage}."
-
-        # Update the Pydantic model
-        clause.risk_score = risk_level
-        
-        clause.rationale = f"{rationale} | Source: {citation}"
-        audited_results.append(clause)
-
-    cur.close()
-    conn.close()
-    return audited_results
 
 def analyze_contract_risk(chunks: list, detected_jurisdiction: str, rules_path: str) -> FullContractReport:
     """

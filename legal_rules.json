@@ -1,6 +1,17 @@
 {
   "global_config": {
-    "forbidden_terms": ["promissory note", "vouchers", "chits", "bond", "placement fee", "exit fee"]
+    "forbidden_terms": [
+      "promissory note",
+      "vouchers",
+      "chits",
+      "bond",
+      "placement fee",
+      "exit fee",
+      "salary deduction for damages",
+      "waive all rights",
+      "no right to complain",
+      "employer owns passport"
+    ]
   },
   "benchmarks": [
     {
@@ -11,11 +22,25 @@
       "law_reference": "Labor Code Art. 83 & 85"
     },
     {
+      "category": "conditions",
+      "jurisdiction": "HK",
+      "baseline": "There is no statutory limit on working hours under HK Cap. 57, but any hours worked beyond those agreed in the contract must be compensated by overtime pay or time off in lieu.",
+      "weight": 5.0,
+      "law_reference": "HK Employment Ordinance Cap. 57, s.17"
+    },
+    {
       "category": "leave",
       "jurisdiction": "PH",
       "baseline": "It shall be the duty of every employer to provide each of his employees a rest period of not less than twenty-four consecutive hours after every six consecutive normal work days.",
       "weight": 8.0,
       "law_reference": "Labor Code Art. 91"
+    },
+    {
+      "category": "leave",
+      "jurisdiction": "HK",
+      "baseline": "An employee is entitled to not less than one rest day in every period of seven days. A rest day shall be a continuous period of not less than 24 hours.",
+      "weight": 8.0,
+      "law_reference": "HK Employment Ordinance Cap. 57, s.17"
     },
     {
       "category": "wages",
@@ -25,6 +50,13 @@
       "law_reference": "Labor Code Art. 102 & 103"
     },
     {
+      "category": "wages",
+      "jurisdiction": "HK",
+      "baseline": "The statutory minimum wage rate in Hong Kong is HKD 40.0 per hour as of May 2023. Wages must be paid within 7 days after the end of the wage period. No deductions shall be made from wages except as permitted by law.",
+      "weight": 10.0,
+      "law_reference": "HK Minimum Wage Ordinance Cap. 608 & Employment Ordinance Cap. 57, s.23-32"
+    },
+    {
       "category": "termination",
       "jurisdiction": "PH",
       "baseline": "An employee shall not be terminated except for a just cause or when authorized by law. Termination requires at least one month advance notice or payment in lieu of notice.",
@@ -32,11 +64,18 @@
       "law_reference": "Labor Code Art. 279 & 283"
     },
     {
+      "category": "termination",
+      "jurisdiction": "HK",
+      "baseline": "Either party may terminate a contract of employment by giving the other party notice in accordance with the contract, or payment in lieu of notice. An employee is protected from summary dismissal without just and sufficient cause.",
+      "weight": 9.0,
+      "law_reference": "HK Employment Ordinance Cap. 57, s.6 & s.9"
+    },
+    {
       "category": "benefits",
       "jurisdiction": "HK",
       "baseline": "A female employee is entitled to 14 weeks of paid maternity leave. The employer must not terminate the contract during pregnancy except for summary dismissal.",
       "weight": 9.0,
-      "law_reference": "HK Employment Ordinance Cap. 57"
+      "law_reference": "HK Employment Ordinance Cap. 57, s.14-15"
     },
     {
       "category": "benefits",
@@ -44,6 +83,62 @@
       "baseline": "Female employees are entitled to maternity leave for the first four deliveries. Every employee who has rendered at least one year of service is entitled to a service incentive leave of five days with pay.",
       "weight": 8.5,
       "law_reference": "RA 11210 / Labor Code Art. 95"
+    },
+    {
+      "category": "benefits",
+      "jurisdiction": "PH",
+      "baseline": "All rank-and-file employees are entitled to a 13th month pay, which shall not be less than one-twelfth of the basic salary of an employee within a calendar year. This shall be paid on or before December 24.",
+      "weight": 9.0,
+      "law_reference": "Presidential Decree No. 851"
+    },
+    {
+      "category": "benefits",
+      "jurisdiction": "HK",
+      "baseline": "An employee with not less than 3 months of continuous employment is entitled to sickness allowance at a rate of four-fifths of the daily average wage for each sickness day taken.",
+      "weight": 7.5,
+      "law_reference": "HK Employment Ordinance Cap. 57, s.33"
+    },
+    {
+      "category": "fees",
+      "jurisdiction": "PH",
+      "baseline": "No employer shall directly or indirectly require any employee to pay placement fees. All recruitment fees are the sole responsibility of the foreign employer and shall not be passed on to the worker.",
+      "weight": 10.0,
+      "law_reference": "RA 10022 (Migrant Workers Act) & POEA Rules"
+    },
+    {
+      "category": "fees",
+      "jurisdiction": "HK",
+      "baseline": "No employment agency shall demand or receive from a job seeker any fee other than the prescribed fee which shall not exceed 10% of the first month's wages after employment. Charging upfront fees is prohibited.",
+      "weight": 9.5,
+      "law_reference": "HK Employment Agencies Regulation Cap. 57A"
+    },
+    {
+      "category": "conditions",
+      "jurisdiction": "PH",
+      "baseline": "Work performed beyond eight hours a day shall be paid an additional compensation equivalent to the regular wage plus at least twenty-five percent thereof for the first eight hours of overtime work.",
+      "weight": 7.5,
+      "law_reference": "Labor Code Art. 87"
+    },
+    {
+      "category": "leave",
+      "jurisdiction": "PH",
+      "baseline": "Every employee shall be paid his regular daily wage during regular holidays. Employees who work on a regular holiday shall be entitled to at least two hundred percent of their regular daily wage.",
+      "weight": 8.0,
+      "law_reference": "Labor Code Art. 94"
+    },
+    {
+      "category": "leave",
+      "jurisdiction": "HK",
+      "baseline": "An employee who has been employed for three months or more is entitled to a statutory holiday. An employee required to work on a statutory holiday must be granted an alternative holiday within sixty days.",
+      "weight": 8.0,
+      "law_reference": "HK Employment Ordinance Cap. 57, s.39-40"
+    },
+    {
+      "category": "termination",
+      "jurisdiction": "HK",
+      "baseline": "An employee with 24 months of continuous employment is entitled to severance payment upon dismissal or layoff. The severance payment shall be two-thirds of the last full month's wages or two-thirds of HKD 22,500, whichever is less, for each year of service.",
+      "weight": 9.5,
+      "law_reference": "HK Employment Ordinance Cap. 57, s.31G"
     }
   ]
 }
